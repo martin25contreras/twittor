@@ -23,6 +23,16 @@ const APP_SHELL_INMUTABLE = [
   "css/animate.css",
 ];
 
+function limpiarCache(cacheName, numeroItems) {
+  caches.open(cacheName).then((cache) => {
+    return cache.keys().then((keys) => {
+      if (keys.length > numeroItems) {
+        cache.delete(keys[0]).then(limpiarCache(cacheName, numeroItems));
+      }
+    });
+  });
+}
+
 self.addEventListener("install", (e) => {
   const cacheStatic = caches.open(STATIC_CACHE).then((cache) => {
     return cache.addAll(APP_SHELL);
@@ -49,11 +59,17 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const resp = caches.match(e.request).then((res) => {
-    if (res) {
-      return res;
-    } else {
-      console.log("Fallo: " + e.request.url);
-    }
+    if (res) return res;
+
+    console.log("Fallo: " + e.request.url);
+    return fetch(e.request).then((newResp) => {
+      caches.open(DYNAMIC_CACHE).then((cache) => {
+        cache.put(e.request, newResp);
+        limpiarCache(DYNAMIC_CACHE, 50);
+      });
+
+      return newResp.clone();
+    });
   });
 
   e.respondWith(resp);
